@@ -140,7 +140,7 @@ class PRTemplateManager:
 
                 data["description"] = "\n".join(desc_lines).strip()
 
-                # Detect type from content
+                # Detect type from content (as fallback)
                 lower_content = content.lower()
                 if any(
                     word in lower_content for word in ["fix", "bug", "issue", "error"]
@@ -150,24 +150,28 @@ class PRTemplateManager:
                     data["type"] = "refactor"
                 elif any(word in lower_content for word in ["docs", "documentation"]):
                     data["type"] = "docs"
-                elif any(word in lower_content for word in ["test"]):
-                    data["type"] = "test"
+                # Don't check for "test" in content - too generic
 
             except Exception:
                 pass
 
         # Read implementation_plan.json for more details
+        # This takes PRIORITY over content-based detection
         plan_file = spec_dir / "implementation_plan.json"
         if plan_file.exists():
             try:
                 plan = json.loads(plan_file.read_text(encoding="utf-8"))
 
-                # Get workflow type (might override detected type)
+                # Get workflow type (overrides content-based detection)
                 workflow = plan.get("workflow_type", "feature")
                 if workflow in ["bug_fix", "bug"]:
                     data["type"] = "fix"
                 elif workflow == "refactor":
                     data["type"] = "refactor"
+                elif workflow == "feature":
+                    data["type"] = "feature"
+                elif workflow == "test":
+                    data["type"] = "test"
 
                 # Detect area from phases
                 phases = plan.get("phases", [])
@@ -219,50 +223,105 @@ class PRTemplateManager:
         # Replace common placeholders
         populated = template
 
-        # Fill in description section
-        # Match: ## Description\n<!-- ... -->\n (blank area)
-        # Or: ## Description\n\n (blank area before next section)
-        desc_pattern = r"(## Description\s*\n(?:<!--.*?-->\s*\n)?)\n*(?=##|\Z)"
+        # Fill in description section (flexible matching)
+        # Matches:
+        # - ## Description\n<!-- ... -->\n
+        # - # Description\n
+        # - Description\n (with various indentation)
         if data["description"]:
-            populated = re.sub(
-                desc_pattern,
-                rf"\1\n{data['description']}\n\n",
-                populated,
-                flags=re.DOTALL,
-            )
+            # Pattern 1: Markdown headers - replace content between header and next section
+            # Fixed lookahead: stop at next header (## ), not at newline+header (\n## )
+            desc_pattern1 = r"(#{1,3}\s*Description\s*\n)(?:<!--.*?-->\s*\n)?(.*?)(?=#{1,3}\s|\Z)"
+            if re.search(desc_pattern1, populated, re.DOTALL | re.IGNORECASE):
+                populated = re.sub(
+                    desc_pattern1,
+                    rf"\1\n{data['description']}\n\n",
+                    populated,
+                    flags=re.DOTALL | re.IGNORECASE,
+                )
 
-        # Fill in Related Issue section
-        # Match: Closes #\n or Fixes #\n
+            # Pattern 2: "What was done:" style - replace just the value
+            desc_pattern2 = r"(What was done:\s*)([^\n]*)"
+            if re.search(desc_pattern2, populated, re.IGNORECASE):
+                populated = re.sub(
+                    desc_pattern2,
+                    rf"\1{data['description']}",
+                    populated,
+                    flags=re.IGNORECASE,
+                )
+
+        # Fill in Related Issue section (flexible matching)
+        # Matches:
+        # - Closes #
+        # - Fixes #
+        # - Related Issues
+        # - Link to any related issue
         if data["issue_number"]:
+            # Pattern 1: "Closes #" or "Fixes #" on its own line
+            if re.search(r"(Closes|Fixes) #(\s*)$", populated, re.MULTILINE | re.IGNORECASE):
+                populated = re.sub(
+                    r"(Closes|Fixes) #(\s*)$",
+                    rf"\1 #{data['issue_number']}\2",
+                    populated,
+                    flags=re.MULTILINE | re.IGNORECASE,
+                )
+
+            # Pattern 2: "Related Issues" header with placeholder text
+            # Fixed lookahead: stop at next header (## ), not at newline+header (\n## )
+            related_pattern = r"(#{1,3}\s*Related Issues?\s*\n)(?:<!--.*?-->\s*\n)?(.*?)(?=#{1,3}\s|\Z)"
+            if re.search(related_pattern, populated, re.DOTALL | re.IGNORECASE):
+                populated = re.sub(
+                    related_pattern,
+                    rf"\1\nCloses #{data['issue_number']}\n\n",
+                    populated,
+                    flags=re.DOTALL | re.IGNORECASE,
+                )
+
+            # Pattern 3: "Link to any related issue" placeholder text
             populated = re.sub(
-                r"(Closes|Fixes) #\s*$",
-                rf"\1 #{data['issue_number']}",
+                r"Link to any related issue.*?(?=\n\n|\Z)",
+                rf"Closes #{data['issue_number']}",
                 populated,
-                flags=re.MULTILINE,
+                flags=re.DOTALL | re.IGNORECASE,
             )
 
-        # Check type of change checkboxes
-        type_mapping = {
-            "fix": "🐛 Bug fix",
-            "feature": "✨ New feature",
-            "docs": "📚 Documentation",
-            "refactor": "♻️ Refactor",
-            "test": "🧪 Test",
+        # Check type of change checkboxes (flexible matching)
+        # Matches both emoji-style and plain text checkboxes
+        type_patterns = {
+            "fix": [r"bug\s*fix", r"bugfix", r"fix"],
+            "feature": [r"new\s*feature", r"feature", r"enhancement"],
+            "docs": [r"documentation", r"docs"],
+            "refactor": [r"refactor(?:ing)?"],
+            "test": [r"test(?:ing)?"],
         }
-        type_label = type_mapping.get(data["type"], "✨ New feature")
-        # Check the matching checkbox
-        populated = re.sub(
-            rf"- \[ \] {re.escape(type_label)}",
-            rf"- [x] {type_label}",
-            populated,
-        )
 
-        # Check area checkboxes
+        detected_type = data.get("type", "feature")
+        patterns = type_patterns.get(detected_type, type_patterns["feature"])
+
+        # Try to match and replace checkboxes
+        for pattern in patterns:
+            # Match checkbox with pattern (case-insensitive)
+            # Captures the full checkbox line and replaces [ ] with [x]
+            checkbox_pattern = rf"(- \[) \] ([^\n]*{pattern}[^\n]*)"
+            if re.search(checkbox_pattern, populated, re.IGNORECASE):
+                populated = re.sub(
+                    checkbox_pattern,
+                    r"\1x] \2",
+                    populated,
+                    flags=re.IGNORECASE,
+                    count=1,  # Only mark first match
+                )
+                break  # Stop after first successful match
+
+        # Check area checkboxes (flexible matching)
         if data["area"] in ["Frontend", "Backend", "Fullstack"]:
+            area_pattern = rf"(- \[) \] ([^\n]*{data['area']}[^\n]*)"
             populated = re.sub(
-                rf"- \[ \] {data['area']}",
-                rf"- [x] {data['area']}",
+                area_pattern,
+                r"\1x] \2",
                 populated,
+                flags=re.IGNORECASE,
+                count=1,
             )
 
         return populated
