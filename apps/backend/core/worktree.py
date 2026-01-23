@@ -5,13 +5,20 @@ Git Worktree Manager - Per-Spec Architecture
 
 Each spec gets its own worktree:
 - Worktree path: .auto-claude/worktrees/tasks/{spec-name}/
-- Branch name: auto-claude/{spec-name}
+- Branch name: {BRANCH_PREFIX}/{spec-name} (configurable via BRANCH_PREFIX env var)
+
+Default branch naming: auto-claude/{spec-name}
+Examples:
+  - BRANCH_PREFIX="auto-claude" → auto-claude/001-feature
+  - BRANCH_PREFIX="feature" → feature/001-feature
+  - BRANCH_PREFIX="" → 001-feature
 
 This allows:
 1. Multiple specs to be worked on simultaneously
 2. Each spec's changes are isolated
 3. Branches persist until explicitly merged
 4. Clear 1:1:1 mapping: spec → worktree → branch
+5. Customizable branch naming to match team conventions
 """
 
 import asyncio
@@ -170,7 +177,7 @@ class WorktreeManager:
     Manages per-spec Git worktrees.
 
     Each spec gets its own worktree in .auto-claude/worktrees/tasks/{spec-name}/ with
-    a corresponding branch auto-claude/{spec-name}.
+    a corresponding branch {prefix}/{spec-name} (configurable via BRANCH_PREFIX env var).
     """
 
     # Timeout constants for subprocess operations
@@ -183,6 +190,10 @@ class WorktreeManager:
         self.base_branch = base_branch or self._detect_base_branch()
         self.worktrees_dir = project_dir / ".auto-claude" / "worktrees" / "tasks"
         self._merge_lock = asyncio.Lock()
+
+        # Read branch prefix from environment (default: "auto-claude")
+        # Set to empty string to use just the spec name
+        self.branch_prefix = os.getenv("BRANCH_PREFIX", "auto-claude")
 
     def _detect_base_branch(self) -> str:
         """
@@ -329,8 +340,20 @@ class WorktreeManager:
         return new_path
 
     def get_branch_name(self, spec_name: str) -> str:
-        """Get the branch name for a spec."""
-        return f"auto-claude/{spec_name}"
+        """
+        Get the branch name for a spec.
+
+        Uses BRANCH_PREFIX environment variable (default: "auto-claude").
+        If BRANCH_PREFIX is empty, returns just the spec name.
+
+        Examples:
+            BRANCH_PREFIX="auto-claude" -> "auto-claude/001-feature"
+            BRANCH_PREFIX="feature" -> "feature/001-feature"
+            BRANCH_PREFIX="" -> "001-feature"
+        """
+        if self.branch_prefix:
+            return f"{self.branch_prefix}/{spec_name}"
+        return spec_name
 
     def worktree_exists(self, spec_name: str) -> bool:
         """Check if a worktree exists for a spec."""
@@ -363,19 +386,23 @@ class WorktreeManager:
 
     def _check_branch_namespace_conflict(self) -> str | None:
         """
-        Check if a branch named 'auto-claude' exists, which would block creating
-        branches in the 'auto-claude/*' namespace.
+        Check if a branch with the configured prefix exists, which would block creating
+        branches in the '{prefix}/*' namespace.
 
         Git stores branch refs as files under .git/refs/heads/, so a branch named
-        'auto-claude' creates a file that prevents creating the 'auto-claude/'
-        directory needed for 'auto-claude/{spec-name}' branches.
+        'feature' creates a file that prevents creating the 'feature/'
+        directory needed for 'feature/{spec-name}' branches.
 
         Returns:
             The conflicting branch name if found, None otherwise.
         """
-        result = self._run_git(["rev-parse", "--verify", "auto-claude"])
+        # Skip check if no prefix configured (using just spec names)
+        if not self.branch_prefix:
+            return None
+
+        result = self._run_git(["rev-parse", "--verify", self.branch_prefix])
         if result.returncode == 0:
-            return "auto-claude"
+            return self.branch_prefix
         return None
 
     def _get_worktree_stats(self, spec_name: str) -> dict:
@@ -481,14 +508,14 @@ class WorktreeManager:
         worktree_path = self.get_worktree_path(spec_name)
         branch_name = self.get_branch_name(spec_name)
 
-        # Check for branch namespace conflict (e.g., 'auto-claude' blocking 'auto-claude/*')
+        # Check for branch namespace conflict (e.g., 'feature' blocking 'feature/*')
         conflicting_branch = self._check_branch_namespace_conflict()
         if conflicting_branch:
             raise WorktreeError(
                 f"Branch '{conflicting_branch}' exists and blocks creating '{branch_name}'.\n"
                 f"\n"
-                f"Git branch names work like file paths - a branch named 'auto-claude' prevents\n"
-                f"creating branches under 'auto-claude/' (like 'auto-claude/{spec_name}').\n"
+                f"Git branch names work like file paths - a branch named '{conflicting_branch}' prevents\n"
+                f"creating branches under '{conflicting_branch}/' (like '{conflicting_branch}/{spec_name}').\n"
                 f"\n"
                 f"Fix: Rename the conflicting branch:\n"
                 f"  git branch -m {conflicting_branch} {conflicting_branch}-backup"
