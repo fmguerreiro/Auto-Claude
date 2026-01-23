@@ -956,9 +956,19 @@ class WorktreeManager:
             )
 
         target = target_branch or self.base_branch
-        pr_title = title or f"auto-claude: {spec_name}"
 
-        # Get PR body from spec.md if available
+        # Get PR title and body using template manager
+        from core.pr_template_manager import PRTemplateManager
+
+        # Find spec directory for template manager
+        spec_dir = self.get_worktree_path(spec_name) / ".auto-claude" / "specs" / spec_name
+        if not spec_dir.exists():
+            spec_dir = self.project_dir / ".auto-claude" / "specs" / spec_name
+
+        manager = PRTemplateManager(self.project_dir)
+
+        # Generate title and body
+        pr_title = title or manager.generate_pr_title(spec_name, spec_dir)
         pr_body = self._extract_spec_summary(spec_name)
 
         # Find gh executable before attempting PR creation
@@ -1082,45 +1092,31 @@ class WorktreeManager:
             )
 
     def _extract_spec_summary(self, spec_name: str) -> str:
-        """Extract a summary from spec.md for PR body."""
+        """
+        Generate PR body using template if available.
+
+        Discovers and populates PR/MR templates for GitHub, GitLab, etc.
+        Falls back to simple summary if no template found.
+        """
+        from core.pr_template_manager import PRTemplateManager
+
+        # Find spec directory
         worktree_path = self.get_worktree_path(spec_name)
-        spec_path = worktree_path / ".auto-claude" / "specs" / spec_name / "spec.md"
+        spec_dir = worktree_path / ".auto-claude" / "specs" / spec_name
 
-        if not spec_path.exists():
+        if not spec_dir.exists():
             # Try project spec path
-            spec_path = (
-                self.project_dir / ".auto-claude" / "specs" / spec_name / "spec.md"
-            )
+            spec_dir = self.project_dir / ".auto-claude" / "specs" / spec_name
 
-        if not spec_path.exists():
+        if not spec_dir.exists():
             return "Auto-generated PR from Auto-Claude build."
 
         try:
-            content = spec_path.read_text(encoding="utf-8")
-            # Extract first few paragraphs (skip title, get overview)
-            lines = content.split("\n")
-            summary_lines = []
-            in_content = False
-
-            for line in lines:
-                # Skip title headers
-                if line.startswith("# "):
-                    continue
-                # Start capturing after first content line
-                if line.strip() and not line.startswith("#"):
-                    in_content = True
-                if in_content:
-                    if line.startswith("## ") and summary_lines:
-                        break  # Stop at next section
-                    summary_lines.append(line)
-                    if len(summary_lines) >= 10:  # Limit to ~10 lines
-                        break
-
-            summary = "\n".join(summary_lines).strip()
-            if summary:
-                return summary
-        except (OSError, UnicodeDecodeError) as e:
-            # Silently fall back to default - file read errors shouldn't block PR creation
+            # Use template manager to generate PR body
+            manager = PRTemplateManager(self.project_dir)
+            return manager.generate_pr_body(spec_name, spec_dir)
+        except Exception as e:
+            # Silently fall back to default - template errors shouldn't block PR creation
             debug_warning(
                 "worktree", f"Could not extract spec summary for PR body: {e}"
             )
