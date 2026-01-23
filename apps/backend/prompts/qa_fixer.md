@@ -267,7 +267,7 @@ git add . ':!.auto-claude'
 # 2. Run git status to see what git sees
 # 3. Adjust your paths accordingly
 
-git commit -m "fix: Address QA issues (qa-requested)
+git commit -m "fix: Address QA issues
 
 Fixes:
 - [Issue 1 title]
