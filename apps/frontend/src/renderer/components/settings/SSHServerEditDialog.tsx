@@ -35,6 +35,7 @@ interface FormData {
   user: string;
   identityFile: string;
   pythonPath: string;
+  autoBuildPath: string;
 }
 
 interface FormErrors {
@@ -62,7 +63,8 @@ export function SSHServerEditDialog({
     port: '22',
     user: '',
     identityFile: '',
-    pythonPath: ''
+    pythonPath: '',
+    autoBuildPath: ''
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -80,7 +82,8 @@ export function SSHServerEditDialog({
           port: String(server.port || 22),
           user: server.user || '',
           identityFile: server.identityFile || '',
-          pythonPath: server.pythonPath || ''
+          pythonPath: server.pythonPath || '',
+          autoBuildPath: server.autoBuildPath || ''
         });
       } else {
         setFormData({
@@ -89,7 +92,8 @@ export function SSHServerEditDialog({
           port: '22',
           user: '',
           identityFile: '',
-          pythonPath: ''
+          pythonPath: '',
+          autoBuildPath: ''
         });
       }
       setErrors({});
@@ -131,7 +135,8 @@ export function SSHServerEditDialog({
       port: parseInt(formData.port, 10) || 22,
       user: formData.user.trim() || undefined,
       identityFile: formData.identityFile.trim() || undefined,
-      pythonPath: formData.pythonPath.trim() || undefined
+      pythonPath: formData.pythonPath.trim() || undefined,
+      autoBuildPath: formData.autoBuildPath.trim() || undefined
     };
 
     // If editing, test existing server
@@ -186,7 +191,8 @@ export function SSHServerEditDialog({
       port: parseInt(formData.port, 10) || 22,
       user: formData.user.trim() || undefined,
       identityFile: formData.identityFile.trim() || undefined,
-      pythonPath: formData.pythonPath.trim() || undefined
+      pythonPath: formData.pythonPath.trim() || undefined,
+      autoBuildPath: formData.autoBuildPath.trim() || undefined
     };
 
     let result;
@@ -342,6 +348,20 @@ export function SSHServerEditDialog({
             />
             <p className="text-xs text-muted-foreground">
               {t('settings:sshServers.hints.pythonPath')}
+            </p>
+          </div>
+
+          {/* Auto-Claude Path */}
+          <div className="grid gap-2">
+            <Label htmlFor="autoBuildPath">{t('settings:sshServers.fields.autoBuildPath')}</Label>
+            <Input
+              id="autoBuildPath"
+              value={formData.autoBuildPath}
+              onChange={(e) => handleInputChange('autoBuildPath', e.target.value)}
+              placeholder={t('settings:sshServers.placeholders.autoBuildPath')}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t('settings:sshServers.hints.autoBuildPath')}
             </p>
           </div>
 

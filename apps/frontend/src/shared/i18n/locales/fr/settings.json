@@ -69,7 +69,8 @@
       "port": "Port",
       "user": "Nom d'utilisateur",
       "identityFile": "Fichier d'identité",
-      "pythonPath": "Chemin Python"
+      "pythonPath": "Chemin Python",
+      "autoBuildPath": "Chemin Auto-Claude"
     },
     "placeholders": {
       "name": "Mon serveur",
@@ -77,7 +78,8 @@
       "port": "22",
       "user": "Laisser vide pour utiliser l'utilisateur actuel",
       "identityFile": "~/.ssh/id_rsa (optionnel)",
-      "pythonPath": "python3 (optionnel)"
+      "pythonPath": "python3 (optionnel)",
+      "autoBuildPath": "~/opt/Auto-Claude"
     },
     "hints": {
       "name": "Un nom convivial pour ce serveur",
@@ -85,7 +87,8 @@
       "port": "Port SSH (par défaut: 22)",
       "user": "Nom d'utilisateur pour la connexion SSH. Si vide, utilise votre nom d'utilisateur système actuel.",
       "identityFile": "Chemin vers la clé privée SSH. Laisser vide pour utiliser ssh-agent.",
-      "pythonPath": "Chemin vers l'interpréteur Python sur le serveur distant. Laisser vide pour 'python3'."
+      "pythonPath": "Chemin vers l'interpréteur Python sur le serveur distant. Laisser vide pour 'python3'.",
+      "autoBuildPath": "Chemin vers l'installation Auto-Claude sur le serveur distant. Requis pour les fonctionnalités de projet distant."
     },
     "validation": {
       "nameRequired": "Le nom du serveur est requis",

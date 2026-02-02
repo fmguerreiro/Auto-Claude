@@ -188,20 +188,37 @@ export function registerProjectContextHandlers(
       }
 
       try {
-        // Run the analyzer script to regenerate project_index.json
-        const autoBuildSource = getEffectiveSourcePath();
+        let autoBuildSource: string | null;
+        let analyzerPath: string;
+        let indexOutputPath: string;
 
-        if (!autoBuildSource) {
-          return {
-            success: false,
-            error: 'Auto-build source path not configured'
-          };
+        if (project.remote) {
+          // For remote projects, get autoBuildPath from SSH server config
+          const server = sshStore.getServer(project.remote.serverId);
+          if (!server?.autoBuildPath) {
+            return {
+              success: false,
+              error: 'Remote server does not have Auto-Claude path configured. Please set it in SSH server settings.'
+            };
+          }
+          autoBuildSource = server.autoBuildPath;
+          // Use posix paths for remote (Linux) servers
+          analyzerPath = path.posix.join(autoBuildSource, 'apps', 'backend', 'analyzer.py');
+          indexOutputPath = path.posix.join(project.path, AUTO_BUILD_PATHS.PROJECT_INDEX);
+        } else {
+          // For local projects, use local source path
+          autoBuildSource = getEffectiveSourcePath();
+          if (!autoBuildSource) {
+            return {
+              success: false,
+              error: 'Auto-build source path not configured'
+            };
+          }
+          analyzerPath = path.join(autoBuildSource, 'analyzer.py');
+          indexOutputPath = path.join(project.path, AUTO_BUILD_PATHS.PROJECT_INDEX);
         }
 
-        const analyzerPath = path.join(autoBuildSource, 'analyzer.py');
-        const indexOutputPath = path.join(project.path, AUTO_BUILD_PATHS.PROJECT_INDEX);
-
-        console.log('[project-context] Running analyzer via pythonExecutor, remote:', !!project.remote);
+        console.log('[project-context] Running analyzer via pythonExecutor, remote:', !!project.remote, 'source:', autoBuildSource);
 
         // Use centralized Python executor (handles local vs remote automatically)
         const result = await pythonExecutor.execute(

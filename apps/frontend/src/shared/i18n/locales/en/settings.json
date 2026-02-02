@@ -69,7 +69,8 @@
       "port": "Port",
       "user": "Username",
       "identityFile": "Identity File",
-      "pythonPath": "Python Path"
+      "pythonPath": "Python Path",
+      "autoBuildPath": "Auto-Claude Path"
     },
     "placeholders": {
       "name": "My Server",
@@ -77,7 +78,8 @@
       "port": "22",
       "user": "Leave empty to use current user",
       "identityFile": "~/.ssh/id_rsa (optional)",
-      "pythonPath": "python3 (optional)"
+      "pythonPath": "python3 (optional)",
+      "autoBuildPath": "~/opt/Auto-Claude"
     },
     "hints": {
       "name": "A friendly name for this server",
@@ -85,7 +87,8 @@
       "port": "SSH port (default: 22)",
       "user": "Username for SSH connection. If empty, uses your current system username.",
       "identityFile": "Path to SSH private key. Leave empty to use ssh-agent.",
-      "pythonPath": "Path to Python interpreter on remote server. Leave empty for 'python3'."
+      "pythonPath": "Path to Python interpreter on remote server. Leave empty for 'python3'.",
+      "autoBuildPath": "Path to Auto-Claude installation on remote server. Required for remote project features."
     },
     "validation": {
       "nameRequired": "Server name is required",

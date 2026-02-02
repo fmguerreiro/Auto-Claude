@@ -20,6 +20,8 @@ export interface SSHServer {
   identityFile?: string;
   /** Python interpreter path on the remote server (default: "python3") */
   pythonPath?: string;
+  /** Path to Auto-Claude installation on the remote server (e.g., ~/opt/Auto-Claude) */
+  autoBuildPath?: string;
   /** When the server config was created */
   createdAt: Date;
   /** When the server config was last updated */
