@@ -53,6 +53,7 @@ import { AdvancedSettings } from './AdvancedSettings';
 import { DevToolsSettings } from './DevToolsSettings';
 import { DebugSettings } from './DebugSettings';
 import { ProfileList } from './ProfileList';
+import { SSHServersSettings } from './SSHServersSettings';
 import { ProjectSelector } from './ProjectSelector';
 import { ProjectSettingsContent, ProjectSettingsSection } from './ProjectSettingsContent';
 import { useProjectStore } from '../../stores/project-store';
@@ -67,7 +68,7 @@ interface AppSettingsDialogProps {
 }
 
 // App-level settings sections
-export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'agent' | 'paths' | 'integrations' | 'api-profiles' | 'updates' | 'notifications' | 'debug';
+export type AppSection = 'appearance' | 'display' | 'language' | 'devtools' | 'agent' | 'paths' | 'integrations' | 'api-profiles' | 'ssh-servers' | 'updates' | 'notifications' | 'debug';
 
 interface NavItemConfig<T extends string> {
   id: T;
@@ -83,6 +84,7 @@ const appNavItemsConfig: NavItemConfig<AppSection>[] = [
   { id: 'paths', icon: FolderOpen },
   { id: 'integrations', icon: Key },
   { id: 'api-profiles', icon: Server },
+  { id: 'ssh-servers', icon: Server },
   { id: 'updates', icon: Package },
   { id: 'notifications', icon: Bell },
   { id: 'debug', icon: Bug }
@@ -196,6 +198,8 @@ export function AppSettingsDialog({ open, onOpenChange, initialSection, initialP
         return <IntegrationSettings settings={settings} onSettingsChange={setSettings} isOpen={open} />;
       case 'api-profiles':
         return <ProfileList />;
+      case 'ssh-servers':
+        return <SSHServersSettings />;
       case 'updates':
         return <AdvancedSettings settings={settings} onSettingsChange={setSettings} section="updates" version={version} />;
       case 'notifications':

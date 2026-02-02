@@ -132,7 +132,10 @@
     "failedToOpen": "Failed to open project",
     "failedToCreate": "Failed to create project",
     "openExistingAriaLabel": "Open existing project folder",
-    "createNewAriaLabel": "Create new project"
+    "createNewAriaLabel": "Create new project",
+    "openRemote": "Open Remote Project",
+    "openRemoteDescription": "Work on a project hosted on a remote SSH server",
+    "openRemoteAriaLabel": "Open remote project via SSH"
   },
   "customModel": {
     "title": "Custom Model Configuration",
@@ -174,5 +177,28 @@
     "step3": "Click \"Re-authenticate\" on your profile",
     "gotIt": "Got It",
     "goToSettings": "Go to Settings"
+  },
+  "remoteFileBrowser": {
+    "home": "Home directory",
+    "refresh": "Refresh",
+    "loading": "Loading...",
+    "loadError": "Failed to load directory",
+    "empty": "Empty directory",
+    "retry": "Retry",
+    "select": "Select",
+    "connectionLost": "Connection lost. Click to reconnect.",
+    "permissionDenied": "Permission denied. Cannot access this directory.",
+    "serverError": "Server error. Try again later."
+  },
+  "remoteProject": {
+    "title": "Add Remote Project",
+    "description": "Select a project directory on a remote server",
+    "selectServer": "Select Server",
+    "selectServerPlaceholder": "Choose an SSH server...",
+    "noServers": "No SSH servers configured",
+    "noServersDescription": "Add an SSH server in Settings to browse remote projects.",
+    "goToSettings": "Go to Settings",
+    "selectDirectory": "Select Directory",
+    "addProject": "Add Project"
   }
 }

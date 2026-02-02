@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useTranslation } from 'react-i18next';
-import { Settings2 } from 'lucide-react';
+import { Settings2, Server } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import type { Project } from '../../shared/types';
@@ -97,17 +97,29 @@ export function SortableProjectTab({
                 'w-1 h-4 bg-muted-foreground rounded-full flex-shrink-0'
               )}
             />
+            {/* Remote project indicator */}
+            {project.remote && (
+              <Server className="h-3 w-3 text-blue-500 flex-shrink-0" />
+            )}
             <span className="truncate font-medium">
               {project.name}
             </span>
           </div>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="flex items-center gap-2">
-          <span>{project.name}</span>
-          {shortcutHint && (
-            <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border border-border font-mono">
-              {shortcutHint}
-            </kbd>
+        <TooltipContent side="bottom" className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span>{project.name}</span>
+            {shortcutHint && (
+              <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border border-border font-mono">
+                {shortcutHint}
+              </kbd>
+            )}
+          </div>
+          {project.remote && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Server className="h-3 w-3" />
+              <span>{t('projectTab.remoteProject', 'Remote project')}</span>
+            </div>
           )}
         </TooltipContent>
       </Tooltip>

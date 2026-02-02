@@ -4,18 +4,20 @@
 
 import { DEFAULT_PROJECT_SETTINGS } from '../../../shared/constants';
 import { mockProjects } from './mock-data';
+import type { RemoteProjectConfig } from '../../../shared/types/ssh';
 
 export const projectMock = {
-  addProject: async (projectPath: string) => ({
+  addProject: async (projectPath: string, remote?: RemoteProjectConfig) => ({
     success: true,
     data: {
       id: `mock-${Date.now()}`,
       name: projectPath.split('/').pop() || 'new-project',
       path: projectPath,
-      autoBuildPath: `${projectPath}/auto-claude`,
+      autoBuildPath: remote ? '' : `${projectPath}/auto-claude`,
       settings: DEFAULT_PROJECT_SETTINGS,
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      remote
     }
   }),
 

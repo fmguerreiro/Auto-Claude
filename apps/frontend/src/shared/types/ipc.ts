@@ -144,7 +144,7 @@ export interface TabState {
 
 export interface ElectronAPI {
   // Project operations
-  addProject: (projectPath: string) => Promise<IPCResult<Project>>;
+  addProject: (projectPath: string, remote?: import('./ssh').RemoteProjectConfig) => Promise<IPCResult<Project>>;
   removeProject: (projectId: string) => Promise<IPCResult>;
   getProjects: () => Promise<IPCResult<Project[]>>;
   updateProjectSettings: (projectId: string, settings: Partial<ProjectSettings>) => Promise<IPCResult>;
@@ -843,6 +843,20 @@ export interface ElectronAPI {
     thumbnail: string;
   }>>>;
   capture: (options: { sourceId: string }) => Promise<IPCResult<string>>;
+
+  // SSH Server operations (remote project support)
+  listSSHServers: () => Promise<IPCResult<import('./ssh').SSHServer[]>>;
+  getSSHServer: (serverId: string) => Promise<IPCResult<import('./ssh').SSHServer | undefined>>;
+  addSSHServer: (serverData: Omit<import('./ssh').SSHServer, 'id' | 'createdAt' | 'updatedAt'>) => Promise<IPCResult<import('./ssh').SSHServer>>;
+  updateSSHServer: (serverId: string, updates: Partial<import('./ssh').SSHServer>) => Promise<IPCResult<import('./ssh').SSHServer | undefined>>;
+  removeSSHServer: (serverId: string) => Promise<IPCResult<boolean>>;
+  testSSHConnection: (serverId: string) => Promise<IPCResult<import('./ssh').SSHConnectionTestResult>>;
+  listRemoteDirectory: (
+    serverId: string,
+    remotePath: string,
+    options?: { showHidden?: boolean; directoriesOnly?: boolean }
+  ) => Promise<IPCResult<import('./ssh').RemoteDirectoryEntry[]>>;
+  getRemoteHomeDirectory: (serverId: string) => Promise<IPCResult<string>>;
 }
 
 declare global {

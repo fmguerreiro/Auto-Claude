@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Project, ProjectSettings, AutoBuildVersionInfo, InitializationResult } from '../../shared/types';
+import type { RemoteProjectConfig } from '../../shared/types/ssh';
 
 // localStorage keys for persisting project state (legacy - now using IPC)
 const LAST_SELECTED_PROJECT_KEY = 'lastSelectedProjectId';
@@ -330,12 +331,14 @@ export async function loadProjects(): Promise<void> {
 
 /**
  * Add a new project
+ * @param projectPath - Local or remote path to the project
+ * @param remote - Optional remote project configuration for SSH projects
  */
-export async function addProject(projectPath: string): Promise<Project | null> {
+export async function addProject(projectPath: string, remote?: RemoteProjectConfig): Promise<Project | null> {
   const store = useProjectStore.getState();
 
   try {
-    const result = await window.electronAPI.addProject(projectPath);
+    const result = await window.electronAPI.addProject(projectPath, remote);
     if (result.success && result.data) {
       store.addProject(result.data);
       store.selectProject(result.data.id);

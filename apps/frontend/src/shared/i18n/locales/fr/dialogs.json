@@ -132,7 +132,10 @@
     "failedToOpen": "Échec de l'ouverture du projet",
     "failedToCreate": "Échec de la création du projet",
     "openExistingAriaLabel": "Ouvrir un dossier de projet existant",
-    "createNewAriaLabel": "Créer un nouveau projet"
+    "createNewAriaLabel": "Créer un nouveau projet",
+    "openRemote": "Ouvrir un projet distant",
+    "openRemoteDescription": "Travailler sur un projet hébergé sur un serveur SSH distant",
+    "openRemoteAriaLabel": "Ouvrir un projet distant via SSH"
   },
   "customModel": {
     "title": "Configuration du modèle personnalisé",
@@ -174,5 +177,28 @@
     "step3": "Cliquez sur « Réauthentifier » sur votre profil",
     "gotIt": "Compris",
     "goToSettings": "Aller aux paramètres"
+  },
+  "remoteFileBrowser": {
+    "home": "Répertoire personnel",
+    "refresh": "Actualiser",
+    "loading": "Chargement...",
+    "loadError": "Échec du chargement du répertoire",
+    "empty": "Répertoire vide",
+    "retry": "Réessayer",
+    "select": "Sélectionner",
+    "connectionLost": "Connexion perdue. Cliquez pour vous reconnecter.",
+    "permissionDenied": "Permission refusée. Impossible d'accéder à ce répertoire.",
+    "serverError": "Erreur du serveur. Réessayez plus tard."
+  },
+  "remoteProject": {
+    "title": "Ajouter un projet distant",
+    "description": "Sélectionnez un répertoire de projet sur un serveur distant",
+    "selectServer": "Sélectionner le serveur",
+    "selectServerPlaceholder": "Choisir un serveur SSH...",
+    "noServers": "Aucun serveur SSH configuré",
+    "noServersDescription": "Ajoutez un serveur SSH dans les Paramètres pour parcourir les projets distants.",
+    "goToSettings": "Aller aux paramètres",
+    "selectDirectory": "Sélectionner le répertoire",
+    "addProject": "Ajouter le projet"
   }
 }

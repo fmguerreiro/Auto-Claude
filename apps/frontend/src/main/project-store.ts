@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, Dirent
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import type { Project, ProjectSettings, Task, TaskStatus, TaskMetadata, ImplementationPlan, ReviewReason, PlanSubtask } from '../shared/types';
+import type { RemoteProjectConfig } from '../shared/types/ssh';
 import { DEFAULT_PROJECT_SETTINGS, AUTO_BUILD_PATHS, getSpecsDir, JSON_ERROR_PREFIX, JSON_ERROR_TITLE_SUFFIX } from '../shared/constants';
 import { getAutoBuildPath, isInitialized } from './project-initializer';
 import { getTaskWorktreeDir } from './worktree-paths';
@@ -80,14 +81,18 @@ export class ProjectStore {
 
   /**
    * Add a new project
+   * @param projectPath - Local or remote path to the project
+   * @param name - Optional display name (defaults to basename of path)
+   * @param remote - Optional remote project configuration for SSH projects
    */
-  addProject(projectPath: string, name?: string): Project {
+  addProject(projectPath: string, name?: string, remote?: RemoteProjectConfig): Project {
     // Check if project already exists
     const existing = this.data.projects.find((p) => p.path === projectPath);
     if (existing) {
       // Validate that .auto-claude folder still exists for existing project
       // If manually deleted, reset autoBuildPath so UI prompts for reinitialization
-      if (existing.autoBuildPath && !isInitialized(existing.path)) {
+      // Skip this check for remote projects as we can't check remotely
+      if (!existing.remote && existing.autoBuildPath && !isInitialized(existing.path)) {
         console.warn(`[ProjectStore] .auto-claude folder was deleted for project "${existing.name}" - resetting autoBuildPath`);
         existing.autoBuildPath = '';
         existing.updatedAt = new Date();
@@ -100,7 +105,8 @@ export class ProjectStore {
     const projectName = name || path.basename(projectPath);
 
     // Determine auto-claude path (supports both 'auto-claude' and '.auto-claude')
-    const autoBuildPath = getAutoBuildPath(projectPath) || '';
+    // For remote projects, we'll set this after checking remotely
+    const autoBuildPath = remote ? '' : (getAutoBuildPath(projectPath) || '');
 
     const project: Project = {
       id: uuidv4(),
@@ -109,12 +115,26 @@ export class ProjectStore {
       autoBuildPath,
       settings: { ...DEFAULT_PROJECT_SETTINGS },
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      remote
     };
 
     this.data.projects.push(project);
     this.save();
 
+    return project;
+  }
+
+  /**
+   * Update a project's remote configuration
+   */
+  updateProjectRemote(projectId: string, remote: RemoteProjectConfig | undefined): Project | undefined {
+    const project = this.data.projects.find((p) => p.id === projectId);
+    if (project) {
+      project.remote = remote;
+      project.updatedAt = new Date();
+      this.save();
+    }
     return project;
   }
 

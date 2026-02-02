@@ -152,6 +152,16 @@ export const IPC_CHANNELS = {
   DIALOG_CREATE_PROJECT_FOLDER: 'dialog:createProjectFolder',
   DIALOG_GET_DEFAULT_PROJECT_LOCATION: 'dialog:getDefaultProjectLocation',
 
+  // SSH Server operations (remote project support)
+  SSH_SERVER_LIST: 'ssh:serverList',
+  SSH_SERVER_GET: 'ssh:serverGet',
+  SSH_SERVER_ADD: 'ssh:serverAdd',
+  SSH_SERVER_UPDATE: 'ssh:serverUpdate',
+  SSH_SERVER_REMOVE: 'ssh:serverRemove',
+  SSH_TEST_CONNECTION: 'ssh:testConnection',
+  SSH_LIST_DIRECTORY: 'ssh:listDirectory',
+  SSH_GET_HOME_DIRECTORY: 'ssh:getHomeDirectory',
+
   // App info
   APP_VERSION: 'app:version',
 

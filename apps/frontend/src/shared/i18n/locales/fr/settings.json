@@ -48,6 +48,100 @@
     "debug": {
       "title": "Debug & Logs",
       "description": "Outils de dépannage"
+    },
+    "ssh-servers": {
+      "title": "Serveurs SSH",
+      "description": "Connexions serveur distant"
+    }
+  },
+  "sshServers": {
+    "title": "Serveurs SSH",
+    "description": "Configurez des serveurs SSH pour le développement de projets distants",
+    "addButton": "Ajouter un serveur",
+    "empty": {
+      "title": "Aucun serveur SSH",
+      "description": "Ajoutez un serveur SSH pour travailler sur des projets distants. Les projets distants exécutent des agents sur le serveur tandis que vous contrôlez d'ici.",
+      "action": "Ajouter un serveur SSH"
+    },
+    "fields": {
+      "name": "Nom",
+      "host": "Hôte",
+      "port": "Port",
+      "user": "Nom d'utilisateur",
+      "identityFile": "Fichier d'identité",
+      "pythonPath": "Chemin Python"
+    },
+    "placeholders": {
+      "name": "Mon serveur",
+      "host": "192.168.1.100 ou serveur.exemple.com",
+      "port": "22",
+      "user": "Laisser vide pour utiliser l'utilisateur actuel",
+      "identityFile": "~/.ssh/id_rsa (optionnel)",
+      "pythonPath": "python3 (optionnel)"
+    },
+    "hints": {
+      "name": "Un nom convivial pour ce serveur",
+      "host": "Adresse IP ou nom d'hôte",
+      "port": "Port SSH (par défaut: 22)",
+      "user": "Nom d'utilisateur pour la connexion SSH. Si vide, utilise votre nom d'utilisateur système actuel.",
+      "identityFile": "Chemin vers la clé privée SSH. Laisser vide pour utiliser ssh-agent.",
+      "pythonPath": "Chemin vers l'interpréteur Python sur le serveur distant. Laisser vide pour 'python3'."
+    },
+    "validation": {
+      "nameRequired": "Le nom du serveur est requis",
+      "hostRequired": "L'hôte est requis",
+      "portInvalid": "Le port doit être un nombre entre 1 et 65535"
+    },
+    "actions": {
+      "save": "Enregistrer le serveur",
+      "saving": "Enregistrement...",
+      "cancel": "Annuler",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "testConnection": "Tester la connexion"
+    },
+    "testConnection": {
+      "label": "Tester la connexion",
+      "testing": "Test en cours...",
+      "success": "Connexion réussie",
+      "failure": "Échec de la connexion",
+      "authFailed": "Échec d'authentification. Vérifiez les identifiants ou la clé SSH.",
+      "connectionRefused": "Connexion refusée. Vérifiez l'hôte et le port.",
+      "timeout": "Délai de connexion dépassé. Le serveur est peut-être inaccessible.",
+      "hostNotFound": "Hôte introuvable. Vérifiez le nom d'hôte.",
+      "networkError": "Erreur réseau. Vérifiez votre connexion."
+    },
+    "toast": {
+      "add": {
+        "title": "Serveur ajouté",
+        "description": "{{name}} a été ajouté à vos serveurs SSH"
+      },
+      "update": {
+        "title": "Serveur mis à jour",
+        "description": "{{name}} a été mis à jour"
+      },
+      "delete": {
+        "title": "Serveur supprimé",
+        "description": "{{name}} a été supprimé de vos serveurs SSH",
+        "errorTitle": "Échec de la suppression",
+        "errorFallback": "Une erreur s'est produite lors de la suppression du serveur"
+      },
+      "test": {
+        "successTitle": "Connexion réussie",
+        "successDescription": "Connecté à {{name}} ({{latency}}ms)",
+        "errorTitle": "Échec de la connexion",
+        "errorDescription": "{{error}}"
+      }
+    },
+    "dialog": {
+      "addTitle": "Ajouter un serveur SSH",
+      "editTitle": "Modifier le serveur SSH",
+      "addDescription": "Configurer un nouveau serveur SSH pour le développement distant",
+      "editDescription": "Mettre à jour la configuration du serveur SSH"
+    },
+    "deleteConfirm": {
+      "title": "Supprimer le serveur SSH ?",
+      "description": "Êtes-vous sûr de vouloir supprimer \"{{name}}\" ? Tout projet utilisant ce serveur devra être reconfiguré."
     }
   },
   "apiProfiles": {

@@ -48,6 +48,100 @@
     "debug": {
       "title": "Debug & Logs",
       "description": "Troubleshooting tools"
+    },
+    "ssh-servers": {
+      "title": "SSH Servers",
+      "description": "Remote server connections"
+    }
+  },
+  "sshServers": {
+    "title": "SSH Servers",
+    "description": "Configure SSH servers for remote project development",
+    "addButton": "Add Server",
+    "empty": {
+      "title": "No SSH Servers",
+      "description": "Add an SSH server to work on remote projects. Remote projects run agents on the server while you control from here.",
+      "action": "Add SSH Server"
+    },
+    "fields": {
+      "name": "Name",
+      "host": "Host",
+      "port": "Port",
+      "user": "Username",
+      "identityFile": "Identity File",
+      "pythonPath": "Python Path"
+    },
+    "placeholders": {
+      "name": "My Server",
+      "host": "192.168.1.100 or server.example.com",
+      "port": "22",
+      "user": "Leave empty to use current user",
+      "identityFile": "~/.ssh/id_rsa (optional)",
+      "pythonPath": "python3 (optional)"
+    },
+    "hints": {
+      "name": "A friendly name for this server",
+      "host": "IP address or hostname",
+      "port": "SSH port (default: 22)",
+      "user": "Username for SSH connection. If empty, uses your current system username.",
+      "identityFile": "Path to SSH private key. Leave empty to use ssh-agent.",
+      "pythonPath": "Path to Python interpreter on remote server. Leave empty for 'python3'."
+    },
+    "validation": {
+      "nameRequired": "Server name is required",
+      "hostRequired": "Host is required",
+      "portInvalid": "Port must be a number between 1 and 65535"
+    },
+    "actions": {
+      "save": "Save Server",
+      "saving": "Saving...",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "delete": "Delete",
+      "testConnection": "Test Connection"
+    },
+    "testConnection": {
+      "label": "Test Connection",
+      "testing": "Testing...",
+      "success": "Connected successfully",
+      "failure": "Connection failed",
+      "authFailed": "Authentication failed. Check credentials or SSH key.",
+      "connectionRefused": "Connection refused. Check host and port.",
+      "timeout": "Connection timed out. Server may be unreachable.",
+      "hostNotFound": "Host not found. Check the hostname.",
+      "networkError": "Network error. Check your connection."
+    },
+    "toast": {
+      "add": {
+        "title": "Server Added",
+        "description": "{{name}} has been added to your SSH servers"
+      },
+      "update": {
+        "title": "Server Updated",
+        "description": "{{name}} has been updated"
+      },
+      "delete": {
+        "title": "Server Removed",
+        "description": "{{name}} has been removed from your SSH servers",
+        "errorTitle": "Failed to Remove",
+        "errorFallback": "An error occurred while removing the server"
+      },
+      "test": {
+        "successTitle": "Connection Successful",
+        "successDescription": "Connected to {{name}} ({{latency}}ms)",
+        "errorTitle": "Connection Failed",
+        "errorDescription": "{{error}}"
+      }
+    },
+    "dialog": {
+      "addTitle": "Add SSH Server",
+      "editTitle": "Edit SSH Server",
+      "addDescription": "Configure a new SSH server for remote development",
+      "editDescription": "Update SSH server configuration"
+    },
+    "deleteConfirm": {
+      "title": "Delete SSH Server?",
+      "description": "Are you sure you want to delete \"{{name}}\"? Any projects using this server will need to be reconfigured."
     }
   },
   "apiProfiles": {

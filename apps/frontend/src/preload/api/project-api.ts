@@ -13,6 +13,7 @@ import type {
   GraphitiConnectionTestResult,
   GitStatus
 } from '../../shared/types';
+import type { RemoteProjectConfig } from '../../shared/types/ssh';
 
 // Tab state interface (persisted in main process)
 export interface TabState {
@@ -23,7 +24,7 @@ export interface TabState {
 
 export interface ProjectAPI {
   // Project Management
-  addProject: (projectPath: string) => Promise<IPCResult<Project>>;
+  addProject: (projectPath: string, remote?: RemoteProjectConfig) => Promise<IPCResult<Project>>;
   removeProject: (projectId: string) => Promise<IPCResult>;
   getProjects: () => Promise<IPCResult<Project[]>>;
   updateProjectSettings: (
@@ -142,8 +143,8 @@ export interface ProjectAPI {
 
 export const createProjectAPI = (): ProjectAPI => ({
   // Project Management
-  addProject: (projectPath: string): Promise<IPCResult<Project>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.PROJECT_ADD, projectPath),
+  addProject: (projectPath: string, remote?: RemoteProjectConfig): Promise<IPCResult<Project>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PROJECT_ADD, projectPath, remote),
 
   removeProject: (projectId: string): Promise<IPCResult> =>
     ipcRenderer.invoke(IPC_CHANNELS.PROJECT_REMOVE, projectId),

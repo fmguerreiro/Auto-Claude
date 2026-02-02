@@ -18,7 +18,8 @@ import {
   changelogMock,
   insightsMock,
   infrastructureMock,
-  settingsMock
+  settingsMock,
+  sshMock
 } from './mocks';
 
 // Check if we're in a browser (not Electron)
@@ -327,6 +328,9 @@ const browserMockAPI: ElectronAPI = {
     success: false,
     error: 'Screenshot capture not available in browser mode'
   }),
+
+  // SSH Operations
+  ...sshMock,
 
   // Debug Operations
   getDebugInfo: async () => ({

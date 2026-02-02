@@ -12,6 +12,7 @@ import type {
   AutoBuildVersionInfo,
   GitStatus
 } from '../../shared/types';
+import type { RemoteProjectConfig } from '../../shared/types/ssh';
 import { projectStore } from '../project-store';
 import {
   initializeProject,
@@ -204,14 +205,15 @@ export function registerProjectHandlers(
 
   ipcMain.handle(
     IPC_CHANNELS.PROJECT_ADD,
-    async (_, projectPath: string): Promise<IPCResult<Project>> => {
+    async (_, projectPath: string, remote?: RemoteProjectConfig): Promise<IPCResult<Project>> => {
       try {
-        // Validate path exists
-        if (!existsSync(projectPath)) {
+        // For local projects, validate path exists
+        // For remote projects, we skip this check as the path is on a remote server
+        if (!remote && !existsSync(projectPath)) {
           return { success: false, error: 'Directory does not exist' };
         }
 
-        const project = projectStore.addProject(projectPath);
+        const project = projectStore.addProject(projectPath, undefined, remote);
         return { success: true, data: project };
       } catch (error) {
         return {
