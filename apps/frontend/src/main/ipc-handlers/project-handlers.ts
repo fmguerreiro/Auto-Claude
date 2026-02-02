@@ -16,7 +16,9 @@ import type { RemoteProjectConfig } from '../../shared/types/ssh';
 import { projectStore } from '../project-store';
 import {
   initializeProject,
+  initializeRemoteProject,
   isInitialized,
+  isRemoteInitialized,
   hasLocalSource,
   checkGitStatus,
   initializeGit
@@ -346,7 +348,15 @@ export function registerProjectHandlers(
           return { success: false, error: 'Project not found' };
         }
 
-        const result = initializeProject(project.path);
+        let result: InitializationResult;
+
+        if (project.remote) {
+          // Remote project - initialize via SSH
+          result = await initializeRemoteProject(project.path, project.remote);
+        } else {
+          // Local project
+          result = initializeProject(project.path);
+        }
 
         if (result.success) {
           // Update project's autoBuildPath
@@ -374,10 +384,20 @@ export function registerProjectHandlers(
           return { success: false, error: 'Project not found' };
         }
 
+        let initialized: boolean;
+
+        if (project.remote) {
+          // Remote project - check via SSH
+          initialized = await isRemoteInitialized(project.path, project.remote);
+        } else {
+          // Local project
+          initialized = isInitialized(project.path);
+        }
+
         return {
           success: true,
           data: {
-            isInitialized: isInitialized(project.path),
+            isInitialized: initialized,
             updateAvailable: false // No updates for .auto-claude - it's just data
           }
         };

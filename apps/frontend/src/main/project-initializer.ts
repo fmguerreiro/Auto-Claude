@@ -2,6 +2,9 @@ import { existsSync, mkdirSync, writeFileSync, readFileSync, appendFileSync } fr
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { getToolPath } from './cli-tool-manager';
+import { sshManager } from './ssh/ssh-manager';
+import { sshStore } from './ssh/ssh-store';
+import type { RemoteProjectConfig } from '../shared/types/ssh';
 
 /**
  * Debug logging - only logs when DEBUG=true or in development mode
@@ -384,4 +387,181 @@ export function getAutoBuildPath(projectPath: string): string | null {
 
   debug('No .auto-claude folder found - project not initialized');
   return null;
+}
+
+/**
+ * Initialize auto-claude data directory on a REMOTE server via SSH.
+ *
+ * This is the remote equivalent of initializeProject() - it creates the
+ * .auto-claude directory with data directories on the remote server.
+ */
+export async function initializeRemoteProject(
+  remotePath: string,
+  remote: RemoteProjectConfig
+): Promise<InitializationResult> {
+  debug('initializeRemoteProject called', { remotePath, serverId: remote.serverId });
+
+  const server = sshStore.getServer(remote.serverId);
+  if (!server) {
+    return {
+      success: false,
+      error: `SSH server not found: ${remote.serverId}`
+    };
+  }
+
+  // Check if remote path exists
+  const checkPathResult = await sshManager.executeCommand(
+    server,
+    `test -d "${remotePath}" && echo "EXISTS" || echo "NOT_FOUND"`
+  );
+
+  if (!checkPathResult.stdout.includes('EXISTS')) {
+    debug('Remote path does not exist', { remotePath });
+    return {
+      success: false,
+      error: `Remote directory not found: ${remotePath}`
+    };
+  }
+
+  // Check git status on remote
+  const gitCheckResult = await sshManager.executeCommand(
+    server,
+    `cd "${remotePath}" && git rev-parse --git-dir 2>/dev/null && git rev-parse HEAD 2>/dev/null && echo "GIT_OK"`
+  );
+
+  if (!gitCheckResult.stdout.includes('GIT_OK')) {
+    debug('Git check failed on remote', { stdout: gitCheckResult.stdout, stderr: gitCheckResult.stderr });
+    return {
+      success: false,
+      error: 'Remote project must be a git repository with at least one commit'
+    };
+  }
+
+  // Check if already initialized
+  const checkInitResult = await sshManager.executeCommand(
+    server,
+    `test -d "${remotePath}/.auto-claude" && echo "INITIALIZED" || echo "NOT_INITIALIZED"`
+  );
+
+  if (checkInitResult.stdout.includes('INITIALIZED')) {
+    debug('Remote project already initialized');
+    return {
+      success: false,
+      error: 'Remote project already has auto-claude initialized (.auto-claude exists)'
+    };
+  }
+
+  // Create .auto-claude directory structure
+  const dataDirs = DATA_DIRECTORIES.map(dir => `"${remotePath}/.auto-claude/${dir}"`).join(' ');
+  const createResult = await sshManager.executeCommand(
+    server,
+    `mkdir -p ${dataDirs} && touch ${DATA_DIRECTORIES.map(dir => `"${remotePath}/.auto-claude/${dir}/.gitkeep"`).join(' ')}`
+  );
+
+  if (!createResult.success) {
+    debug('Failed to create directories on remote', { stderr: createResult.stderr });
+    return {
+      success: false,
+      error: `Failed to create .auto-claude directory: ${createResult.stderr}`
+    };
+  }
+
+  // Update .gitignore
+  const gitignoreEntry = '.auto-claude/';
+  const updateGitignoreResult = await sshManager.executeCommand(
+    server,
+    `cd "${remotePath}" && (grep -qxF "${gitignoreEntry}" .gitignore 2>/dev/null || echo -e "\\n# Auto Claude data directory\\n${gitignoreEntry}" >> .gitignore)`
+  );
+
+  if (!updateGitignoreResult.success) {
+    // Non-fatal - just log it
+    debug('Failed to update .gitignore on remote (non-fatal)', { stderr: updateGitignoreResult.stderr });
+  }
+
+  debug('Remote initialization complete');
+  return { success: true };
+}
+
+/**
+ * Check if a remote project is initialized
+ */
+export async function isRemoteInitialized(
+  remotePath: string,
+  remote: RemoteProjectConfig
+): Promise<boolean> {
+  const server = sshStore.getServer(remote.serverId);
+  if (!server) {
+    return false;
+  }
+
+  const result = await sshManager.executeCommand(
+    server,
+    `test -d "${remotePath}/.auto-claude" && echo "YES" || echo "NO"`
+  );
+
+  return result.stdout.includes('YES');
+}
+
+/**
+ * Check git status on a remote project
+ */
+export async function checkRemoteGitStatus(
+  remotePath: string,
+  remote: RemoteProjectConfig
+): Promise<GitStatus> {
+  const server = sshStore.getServer(remote.serverId);
+  if (!server) {
+    return {
+      isGitRepo: false,
+      hasCommits: false,
+      currentBranch: null,
+      error: `SSH server not found: ${remote.serverId}`
+    };
+  }
+
+  // Check if it's a git repo
+  const gitDirResult = await sshManager.executeCommand(
+    server,
+    `cd "${remotePath}" && git rev-parse --git-dir 2>/dev/null && echo "IS_GIT_REPO"`
+  );
+
+  if (!gitDirResult.stdout.includes('IS_GIT_REPO')) {
+    return {
+      isGitRepo: false,
+      hasCommits: false,
+      currentBranch: null,
+      error: 'Not a git repository. Please run "git init" to initialize git.'
+    };
+  }
+
+  // Check for commits
+  const headResult = await sshManager.executeCommand(
+    server,
+    `cd "${remotePath}" && git rev-parse HEAD 2>/dev/null && echo "HAS_COMMITS"`
+  );
+
+  const hasCommits = headResult.stdout.includes('HAS_COMMITS');
+
+  // Get current branch
+  const branchResult = await sshManager.executeCommand(
+    server,
+    `cd "${remotePath}" && git rev-parse --abbrev-ref HEAD 2>/dev/null`
+  );
+
+  const currentBranch = branchResult.success ? branchResult.stdout.trim() : null;
+
+  if (!hasCommits) {
+    return {
+      isGitRepo: true,
+      hasCommits: false,
+      currentBranch,
+      error: 'Git repository has no commits. Please make an initial commit first.'
+    };
+  }
+
+  return {
+    isGitRepo: true,
+    hasCommits: true,
+    currentBranch
+  };
 }

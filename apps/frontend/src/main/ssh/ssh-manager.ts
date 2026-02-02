@@ -217,6 +217,99 @@ export class SSHManager {
     const server = sshStore.getServer(serverId);
     return server?.pythonPath || 'python3';
   }
+
+  /**
+   * Execute a shell command on a remote server and return the result
+   * Used for initialization, git checks, etc.
+   */
+  async executeCommand(
+    server: SSHServer,
+    command: string,
+    options: { timeout?: number } = {}
+  ): Promise<{ success: boolean; stdout: string; stderr: string; code: number | null }> {
+    const timeout = options.timeout ?? 30000;
+
+    return new Promise((resolve) => {
+      const sshArgs = this.buildSSHArgs(server);
+
+      // Add options for non-interactive execution
+      sshArgs.unshift(
+        '-o', 'BatchMode=yes',
+        '-o', 'ConnectTimeout=10',
+        '-o', 'StrictHostKeyChecking=accept-new'
+      );
+
+      // Wrap command in bash -l to get login environment
+      sshArgs.push(`bash -l -c '${command.replace(/'/g, "'\\''")}'`);
+
+      console.log('[SSHManager] Executing remote command:', { host: server.host, command });
+
+      const sshProcess = spawn('ssh', sshArgs, {
+        env: { ...process.env }
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      sshProcess.stdout?.on('data', (data: Buffer) => {
+        stdout += data.toString();
+      });
+
+      sshProcess.stderr?.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      const timeoutId = setTimeout(() => {
+        sshProcess.kill();
+        resolve({
+          success: false,
+          stdout,
+          stderr: 'Command timed out',
+          code: null
+        });
+      }, timeout);
+
+      sshProcess.on('error', (err) => {
+        clearTimeout(timeoutId);
+        resolve({
+          success: false,
+          stdout,
+          stderr: err.message,
+          code: null
+        });
+      });
+
+      sshProcess.on('close', (code) => {
+        clearTimeout(timeoutId);
+        resolve({
+          success: code === 0,
+          stdout,
+          stderr,
+          code
+        });
+      });
+    });
+  }
+
+  /**
+   * Execute a command using server ID (convenience wrapper)
+   */
+  async executeCommandById(
+    serverId: string,
+    command: string,
+    options: { timeout?: number } = {}
+  ): Promise<{ success: boolean; stdout: string; stderr: string; code: number | null }> {
+    const server = sshStore.getServer(serverId);
+    if (!server) {
+      return {
+        success: false,
+        stdout: '',
+        stderr: `SSH server not found: ${serverId}`,
+        code: null
+      };
+    }
+    return this.executeCommand(server, command, options);
+  }
 }
 
 // Singleton instance
