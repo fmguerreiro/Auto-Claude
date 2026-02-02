@@ -105,11 +105,16 @@ vi.mock('../python-env-manager', () => ({
   getConfiguredPythonPath: vi.fn(() => 'python3')
 }));
 
-vi.mock('electron', () => ({
-  app: {
-    getAppPath: vi.fn(() => '/fake/app/path')
-  }
-}));
+vi.mock('electron', async () => {
+  const _os = await import('os');
+  const _path = await import('path');
+  return {
+    app: {
+      getAppPath: vi.fn(() => '/fake/app/path'),
+      getPath: vi.fn(() => _path.join(_os.tmpdir(), 'agent-process-test-vitest'))
+    }
+  };
+});
 
 // Mock cli-tool-manager to avoid blocking tool detection on Windows
 vi.mock('../cli-tool-manager', () => ({
