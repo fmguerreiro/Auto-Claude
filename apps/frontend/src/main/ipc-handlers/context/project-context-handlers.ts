@@ -193,15 +193,9 @@ export function registerProjectContextHandlers(
         let indexOutputPath: string;
 
         if (project.remote) {
-          // For remote projects, get autoBuildPath from SSH server config
+          // For remote projects, get autoBuildPath from SSH server config (default: ~/opt/Auto-Claude)
           const server = sshStore.getServer(project.remote.serverId);
-          if (!server?.autoBuildPath) {
-            return {
-              success: false,
-              error: 'Remote server does not have Auto-Claude path configured. Please set it in SSH server settings.'
-            };
-          }
-          autoBuildSource = server.autoBuildPath;
+          autoBuildSource = server?.autoBuildPath || '~/opt/Auto-Claude';
           // Use posix paths for remote (Linux) servers
           analyzerPath = path.posix.join(autoBuildSource, 'apps', 'backend', 'analyzer.py');
           indexOutputPath = path.posix.join(project.path, AUTO_BUILD_PATHS.PROJECT_INDEX);
