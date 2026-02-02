@@ -2,6 +2,8 @@
  * Project-related types
  */
 
+import type { RemoteProjectConfig } from './ssh';
+
 export interface Project {
   id: string;
   name: string;
@@ -10,6 +12,12 @@ export interface Project {
   settings: ProjectSettings;
   createdAt: Date;
   updatedAt: Date;
+  /**
+   * Remote project configuration (if this is a remote project).
+   * When set, the project lives on a remote SSH server and commands
+   * are executed via SSH instead of locally.
+   */
+  remote?: RemoteProjectConfig;
 }
 
 export interface ProjectSettings {
