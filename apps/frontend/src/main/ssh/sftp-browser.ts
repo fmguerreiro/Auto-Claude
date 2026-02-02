@@ -3,9 +3,35 @@
  */
 
 import { Client, type ConnectConfig } from 'ssh2';
+import { execSync } from 'child_process';
 import type { SSHServer, RemoteDirectoryEntry } from '../../shared/types/ssh';
 import { sshStore } from './ssh-store';
 import { resolveSSHHost } from './ssh-config-parser';
+
+/**
+ * Get the SSH_AUTH_SOCK path, handling macOS GUI app limitations
+ */
+function getSSHAuthSock(): string | undefined {
+  // First try the environment variable
+  if (process.env.SSH_AUTH_SOCK) {
+    return process.env.SSH_AUTH_SOCK;
+  }
+
+  // On macOS, GUI apps don't inherit SSH_AUTH_SOCK from shell
+  // Try to get it from launchctl
+  if (process.platform === 'darwin') {
+    try {
+      const sock = execSync('launchctl getenv SSH_AUTH_SOCK', { encoding: 'utf-8' }).trim();
+      if (sock) {
+        return sock;
+      }
+    } catch {
+      // launchctl not available or no agent
+    }
+  }
+
+  return undefined;
+}
 
 /**
  * Options for listing a remote directory
@@ -37,17 +63,36 @@ export class SFTPBrowser {
     const effectiveUser = server.user || sshConfig?.user || process.env.USER || 'root';
     const effectiveIdentityFile = server.identityFile || sshConfig?.identityFile;
 
+    const agentSocket = getSSHAuthSock();
+
+    console.log('[SFTPBrowser] Building connection config:', {
+      originalHost: server.host,
+      resolvedHost: effectiveHost,
+      port: effectivePort,
+      user: effectiveUser,
+      identityFile: effectiveIdentityFile,
+      agentSocket: agentSocket || '(none)'
+    });
+
     const config: ConnectConfig = {
       host: effectiveHost,
       port: effectivePort,
       username: effectiveUser,
-      agent: process.env.SSH_AUTH_SOCK,
       readyTimeout: this.connectionTimeout
     };
 
+    // Prefer ssh-agent if available (handles encrypted keys automatically)
+    if (agentSocket) {
+      config.agent = agentSocket;
+    }
+
+    // Also try identity file if specified (ssh2 will try both)
     if (effectiveIdentityFile) {
-      // Note: ssh2 can read the key file directly
-      config.privateKey = require('fs').readFileSync(effectiveIdentityFile);
+      try {
+        config.privateKey = require('fs').readFileSync(effectiveIdentityFile);
+      } catch (err) {
+        console.warn('[SFTPBrowser] Failed to read identity file:', err);
+      }
     }
 
     return config;
