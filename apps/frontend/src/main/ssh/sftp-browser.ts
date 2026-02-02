@@ -1,37 +1,13 @@
 /**
  * SFTP Browser - Browse remote directories via SSH
+ *
+ * Uses the system `sftp` command to leverage macOS Keychain and SSH config,
+ * since the ssh2 library can't access Keychain-stored credentials.
  */
 
-import { Client, type ConnectConfig } from 'ssh2';
-import { execSync } from 'child_process';
+import { spawn } from 'child_process';
 import type { SSHServer, RemoteDirectoryEntry } from '../../shared/types/ssh';
 import { sshStore } from './ssh-store';
-import { resolveSSHHost } from './ssh-config-parser';
-
-/**
- * Get the SSH_AUTH_SOCK path, handling macOS GUI app limitations
- */
-function getSSHAuthSock(): string | undefined {
-  // First try the environment variable
-  if (process.env.SSH_AUTH_SOCK) {
-    return process.env.SSH_AUTH_SOCK;
-  }
-
-  // On macOS, GUI apps don't inherit SSH_AUTH_SOCK from shell
-  // Try to get it from launchctl
-  if (process.platform === 'darwin') {
-    try {
-      const sock = execSync('launchctl getenv SSH_AUTH_SOCK', { encoding: 'utf-8' }).trim();
-      if (sock) {
-        return sock;
-      }
-    } catch {
-      // launchctl not available or no agent
-    }
-  }
-
-  return undefined;
-}
 
 /**
  * Options for listing a remote directory
@@ -45,57 +21,160 @@ export interface ListDirectoryOptions {
 
 /**
  * SFTP Browser for navigating remote file systems
+ * Uses the system sftp command for macOS Keychain compatibility
  */
 export class SFTPBrowser {
-  private connectionTimeout = 10000; // 10 seconds
+  private connectionTimeout = 15000; // 15 seconds
 
   /**
-   * Build SSH2 connection config from an SSHServer
-   * Resolves SSH config aliases (e.g., "home" -> actual hostname)
+   * Build SFTP connection string from server config
+   * Uses host directly since SSH config aliases are resolved by the system ssh/sftp
    */
-  private buildConnectConfig(server: SSHServer): ConnectConfig {
-    // Try to resolve host alias from ~/.ssh/config
-    const sshConfig = resolveSSHHost(server.host);
+  private buildSFTPTarget(server: SSHServer): string {
+    if (server.user) {
+      return `${server.user}@${server.host}`;
+    }
+    return server.host;
+  }
 
-    // Use SSH config values as defaults, but server config takes precedence
-    const effectiveHost = sshConfig?.hostname || server.host;
-    const effectivePort = server.port || sshConfig?.port || 22;
-    const effectiveUser = server.user || sshConfig?.user || process.env.USER || 'root';
-    const effectiveIdentityFile = server.identityFile || sshConfig?.identityFile;
+  /**
+   * Build SFTP command arguments
+   */
+  private buildSFTPArgs(server: SSHServer): string[] {
+    const args: string[] = [
+      '-o', 'BatchMode=yes',
+      '-o', 'StrictHostKeyChecking=accept-new',
+      '-o', 'ConnectTimeout=10'
+    ];
 
-    const agentSocket = getSSHAuthSock();
+    // Add port if non-default
+    if (server.port && server.port !== 22) {
+      args.push('-P', String(server.port));
+    }
 
-    console.log('[SFTPBrowser] Building connection config:', {
-      originalHost: server.host,
-      resolvedHost: effectiveHost,
-      port: effectivePort,
-      user: effectiveUser,
-      identityFile: effectiveIdentityFile,
-      agentSocket: agentSocket || '(none)'
+    // Add identity file if specified
+    if (server.identityFile) {
+      args.push('-i', server.identityFile);
+    }
+
+    return args;
+  }
+
+  /**
+   * Execute an SFTP command and return the output
+   */
+  private async executeSFTPCommand(server: SSHServer, command: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const args = this.buildSFTPArgs(server);
+      const target = this.buildSFTPTarget(server);
+
+      console.log('[SFTPBrowser] Executing:', 'sftp', args.join(' '), target);
+
+      const sftpProcess = spawn('sftp', [...args, target], {
+        env: { ...process.env }
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      sftpProcess.stdout?.on('data', (data: Buffer) => {
+        stdout += data.toString();
+      });
+
+      sftpProcess.stderr?.on('data', (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      // Send the command to sftp's stdin
+      sftpProcess.stdin?.write(command + '\n');
+      sftpProcess.stdin?.write('bye\n');
+      sftpProcess.stdin?.end();
+
+      const timeoutId = setTimeout(() => {
+        sftpProcess.kill();
+        reject(new Error('SFTP operation timed out'));
+      }, this.connectionTimeout);
+
+      sftpProcess.on('error', (err) => {
+        clearTimeout(timeoutId);
+        reject(new Error(`Failed to spawn SFTP process: ${err.message}`));
+      });
+
+      sftpProcess.on('close', (code) => {
+        clearTimeout(timeoutId);
+
+        if (code === 0 || stdout.length > 0) {
+          resolve(stdout);
+        } else {
+          // Parse common errors
+          let errorMsg = stderr.trim() || `SFTP exited with code ${code}`;
+          if (stderr.includes('Permission denied')) {
+            errorMsg = 'Permission denied - check SSH credentials';
+          } else if (stderr.includes('Connection refused')) {
+            errorMsg = 'Connection refused - is SSH server running?';
+          } else if (stderr.includes('No route to host') || stderr.includes('Connection timed out')) {
+            errorMsg = 'Cannot reach host - check network connection';
+          } else if (stderr.includes('Could not resolve hostname')) {
+            errorMsg = `Could not resolve hostname: ${server.host}`;
+          }
+          reject(new Error(`SSH connection failed: ${errorMsg}`));
+        }
+      });
     });
+  }
 
-    const config: ConnectConfig = {
-      host: effectiveHost,
-      port: effectivePort,
-      username: effectiveUser,
-      readyTimeout: this.connectionTimeout
-    };
+  /**
+   * Parse ls -la output into directory entries
+   */
+  private parseLsOutput(output: string, basePath: string, options: ListDirectoryOptions): RemoteDirectoryEntry[] {
+    const { showHidden = false, directoriesOnly = false } = options;
+    const entries: RemoteDirectoryEntry[] = [];
+    const lines = output.split('\n');
 
-    // Prefer ssh-agent if available (handles encrypted keys automatically)
-    if (agentSocket) {
-      config.agent = agentSocket;
-    }
-
-    // Also try identity file if specified (ssh2 will try both)
-    if (effectiveIdentityFile) {
-      try {
-        config.privateKey = require('fs').readFileSync(effectiveIdentityFile);
-      } catch (err) {
-        console.warn('[SFTPBrowser] Failed to read identity file:', err);
+    for (const line of lines) {
+      // Skip empty lines and header lines
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('total') || trimmed.startsWith('sftp>')) {
+        continue;
       }
+
+      // Parse ls -la format: drwxr-xr-x  2 user group  4096 Jan  1 12:00 filename
+      // The format varies, so we'll be flexible
+      const parts = trimmed.split(/\s+/);
+      if (parts.length < 9) continue;
+
+      const permissions = parts[0];
+      const filename = parts.slice(8).join(' '); // Filename might have spaces
+
+      // Skip . and ..
+      if (filename === '.' || filename === '..') continue;
+
+      // Skip hidden files unless requested
+      if (!showHidden && filename.startsWith('.')) continue;
+
+      const isDirectory = permissions.startsWith('d');
+
+      // Skip non-directories if directoriesOnly
+      if (directoriesOnly && !isDirectory) continue;
+
+      // Parse size (might not be accurate for directories)
+      const size = parseInt(parts[4], 10) || 0;
+
+      entries.push({
+        name: filename,
+        path: `${basePath}/${filename}`.replace(/\/+/g, '/'),
+        isDirectory,
+        size: isDirectory ? undefined : size
+      });
     }
 
-    return config;
+    // Sort: directories first, then alphabetically
+    return entries.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) {
+        return a.isDirectory ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
   }
 
   /**
@@ -122,153 +201,10 @@ export class SFTPBrowser {
     remotePath: string,
     options: ListDirectoryOptions = {}
   ): Promise<RemoteDirectoryEntry[]> {
-    const { showHidden = false, directoriesOnly = false } = options;
-
-    return new Promise((resolve, reject) => {
-      const conn = new Client();
-      let resolved = false;
-
-      const cleanup = () => {
-        if (!resolved) {
-          resolved = true;
-          conn.end();
-        }
-      };
-
-      // Safety timeout
-      const timeoutId = setTimeout(() => {
-        cleanup();
-        reject(new Error('SFTP operation timed out'));
-      }, this.connectionTimeout + 5000);
-
-      conn.on('ready', () => {
-        conn.sftp((err, sftp) => {
-          if (err) {
-            clearTimeout(timeoutId);
-            cleanup();
-            reject(new Error(`Failed to start SFTP: ${err.message}`));
-            return;
-          }
-
-          // Expand ~ to home directory
-          const expandedPath = remotePath.startsWith('~')
-            ? remotePath // Let SFTP handle ~ expansion
-            : remotePath;
-
-          sftp.readdir(expandedPath, (err, list) => {
-            clearTimeout(timeoutId);
-            cleanup();
-
-            if (err) {
-              reject(new Error(`Failed to read directory: ${err.message}`));
-              return;
-            }
-
-            const entries: RemoteDirectoryEntry[] = list
-              .filter((item) => {
-                // Filter hidden files
-                if (!showHidden && item.filename.startsWith('.')) {
-                  return false;
-                }
-                // Filter to directories only
-                if (directoriesOnly && !item.attrs.isDirectory()) {
-                  return false;
-                }
-                return true;
-              })
-              .map((item) => ({
-                name: item.filename,
-                path: `${remotePath}/${item.filename}`.replace(/\/+/g, '/'),
-                isDirectory: item.attrs.isDirectory(),
-                size: item.attrs.size,
-                modifiedAt: item.attrs.mtime ? new Date(item.attrs.mtime * 1000) : undefined
-              }))
-              .sort((a, b) => {
-                // Directories first, then alphabetical
-                if (a.isDirectory !== b.isDirectory) {
-                  return a.isDirectory ? -1 : 1;
-                }
-                return a.name.localeCompare(b.name);
-              });
-
-            resolved = true;
-            resolve(entries);
-          });
-        });
-      });
-
-      conn.on('error', (err) => {
-        clearTimeout(timeoutId);
-        cleanup();
-        reject(new Error(`SSH connection failed: ${err.message}`));
-      });
-
-      try {
-        conn.connect(this.buildConnectConfig(server));
-      } catch (err) {
-        clearTimeout(timeoutId);
-        reject(new Error(`Failed to initiate connection: ${err instanceof Error ? err.message : String(err)}`));
-      }
-    });
-  }
-
-  /**
-   * Check if a remote path exists and is a directory
-   */
-  async isDirectory(serverId: string, remotePath: string): Promise<boolean> {
-    const server = sshStore.getServer(serverId);
-    if (!server) {
-      throw new Error(`SSH server not found: ${serverId}`);
-    }
-
-    return new Promise((resolve, reject) => {
-      const conn = new Client();
-      let resolved = false;
-
-      const cleanup = () => {
-        if (!resolved) {
-          resolved = true;
-          conn.end();
-        }
-      };
-
-      const timeoutId = setTimeout(() => {
-        cleanup();
-        reject(new Error('SFTP operation timed out'));
-      }, this.connectionTimeout + 5000);
-
-      conn.on('ready', () => {
-        conn.sftp((err, sftp) => {
-          if (err) {
-            clearTimeout(timeoutId);
-            cleanup();
-            reject(err);
-            return;
-          }
-
-          sftp.stat(remotePath, (err, stats) => {
-            clearTimeout(timeoutId);
-            cleanup();
-
-            if (err) {
-              resolve(false); // Path doesn't exist
-              return;
-            }
-
-            resolved = true;
-            resolve(stats.isDirectory());
-          });
-        });
-      });
-
-      conn.on('error', (err) => {
-        clearTimeout(timeoutId);
-        cleanup();
-        reject(err);
-      });
-
-      conn.connect(this.buildConnectConfig(server));
-    });
+    // Use ls -la to get detailed listing
+    const command = `ls -la "${remotePath}"`;
+    const output = await this.executeSFTPCommand(server, command);
+    return this.parseLsOutput(output, remotePath, options);
   }
 
   /**
@@ -280,58 +216,26 @@ export class SFTPBrowser {
       throw new Error(`SSH server not found: ${serverId}`);
     }
 
-    return new Promise((resolve, reject) => {
-      const conn = new Client();
-      let resolved = false;
+    // Use pwd to get current directory (which is home on connect)
+    const output = await this.executeSFTPCommand(server, 'pwd');
 
-      const cleanup = () => {
-        if (!resolved) {
-          resolved = true;
-          conn.end();
+    // Parse pwd output - look for a line that looks like a path
+    const lines = output.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      // Skip sftp prompts and empty lines
+      if (trimmed.startsWith('/') && !trimmed.includes('sftp>')) {
+        // Extract just the path (might have "Remote working directory:" prefix)
+        const match = trimmed.match(/\/[^\s]*/);
+        if (match) {
+          return match[0];
         }
-      };
+      }
+    }
 
-      const timeoutId = setTimeout(() => {
-        cleanup();
-        reject(new Error('SFTP operation timed out'));
-      }, this.connectionTimeout + 5000);
-
-      conn.on('ready', () => {
-        conn.sftp((err, sftp) => {
-          if (err) {
-            clearTimeout(timeoutId);
-            cleanup();
-            reject(err);
-            return;
-          }
-
-          // Use realpath on ~ to get home directory
-          sftp.realpath('.', (err, absPath) => {
-            clearTimeout(timeoutId);
-            cleanup();
-
-            if (err) {
-              // Fallback to a reasonable default
-              const user = server.user || process.env.USER || 'root';
-              resolved = true;
-              resolve(`/home/${user}`);
-              return;
-            }
-
-            resolved = true;
-            resolve(absPath);
-          });
-        });
-      });
-
-      conn.on('error', (err) => {
-        clearTimeout(timeoutId);
-        cleanup();
-        reject(err);
-      });
-
-      conn.connect(this.buildConnectConfig(server));
-    });
+    // Fallback to a reasonable default
+    const user = server.user || process.env.USER || 'root';
+    return `/home/${user}`;
   }
 }
 
