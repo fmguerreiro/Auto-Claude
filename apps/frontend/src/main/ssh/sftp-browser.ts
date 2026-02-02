@@ -5,6 +5,7 @@
 import { Client, type ConnectConfig } from 'ssh2';
 import type { SSHServer, RemoteDirectoryEntry } from '../../shared/types/ssh';
 import { sshStore } from './ssh-store';
+import { resolveSSHHost } from './ssh-config-parser';
 
 /**
  * Options for listing a remote directory
@@ -24,19 +25,29 @@ export class SFTPBrowser {
 
   /**
    * Build SSH2 connection config from an SSHServer
+   * Resolves SSH config aliases (e.g., "home" -> actual hostname)
    */
   private buildConnectConfig(server: SSHServer): ConnectConfig {
+    // Try to resolve host alias from ~/.ssh/config
+    const sshConfig = resolveSSHHost(server.host);
+
+    // Use SSH config values as defaults, but server config takes precedence
+    const effectiveHost = sshConfig?.hostname || server.host;
+    const effectivePort = server.port || sshConfig?.port || 22;
+    const effectiveUser = server.user || sshConfig?.user || process.env.USER || 'root';
+    const effectiveIdentityFile = server.identityFile || sshConfig?.identityFile;
+
     const config: ConnectConfig = {
-      host: server.host,
-      port: server.port || 22,
-      username: server.user || process.env.USER || 'root',
+      host: effectiveHost,
+      port: effectivePort,
+      username: effectiveUser,
       agent: process.env.SSH_AUTH_SOCK,
       readyTimeout: this.connectionTimeout
     };
 
-    if (server.identityFile) {
+    if (effectiveIdentityFile) {
       // Note: ssh2 can read the key file directly
-      config.privateKey = require('fs').readFileSync(server.identityFile);
+      config.privateKey = require('fs').readFileSync(effectiveIdentityFile);
     }
 
     return config;
