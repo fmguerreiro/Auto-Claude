@@ -2,13 +2,13 @@ import { ipcMain } from 'electron';
 import type { BrowserWindow } from 'electron';
 import path from 'path';
 import { existsSync, readFileSync } from 'fs';
-import { spawn } from 'child_process';
 import { IPC_CHANNELS, getSpecsDir, AUTO_BUILD_PATHS } from '../../../shared/constants';
 import type {
   IPCResult,
   ProjectContextData,
   ProjectIndex,
-  MemoryEpisode
+  MemoryEpisode,
+  Project
 } from '../../../shared/types';
 import { projectStore } from '../../project-store';
 import { getMemoryService, isKuzuAvailable } from '../../memory-service';
@@ -21,14 +21,14 @@ import {
   buildMemoryStatus
 } from './memory-status-handlers';
 import { loadFileBasedMemories } from './memory-data-handlers';
-import { parsePythonCommand } from '../../python-detector';
-import { getConfiguredPythonPath } from '../../python-env-manager';
-import { getAugmentedEnv } from '../../env-utils';
+import { pythonExecutor } from '../../python-executor';
+import { sshManager } from '../../ssh/ssh-manager';
+import { sshStore } from '../../ssh/ssh-store';
 
 /**
- * Load project index from file
+ * Load project index from file (local)
  */
-function loadProjectIndex(projectPath: string): ProjectIndex | null {
+function loadProjectIndexLocal(projectPath: string): ProjectIndex | null {
   const indexPath = path.join(projectPath, AUTO_BUILD_PATHS.PROJECT_INDEX);
   if (!existsSync(indexPath)) {
     return null;
@@ -40,6 +40,47 @@ function loadProjectIndex(projectPath: string): ProjectIndex | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Load project index from remote server via SSH
+ */
+async function loadProjectIndexRemote(project: Project): Promise<ProjectIndex | null> {
+  if (!project.remote) {
+    return null;
+  }
+
+  const server = sshStore.getServer(project.remote.serverId);
+  if (!server) {
+    return null;
+  }
+
+  const indexPath = path.posix.join(project.path, AUTO_BUILD_PATHS.PROJECT_INDEX);
+
+  const result = await sshManager.executeCommand(
+    server,
+    `cat "${indexPath}" 2>/dev/null`
+  );
+
+  if (!result.success || !result.stdout.trim()) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load project index (handles both local and remote)
+ */
+async function loadProjectIndex(project: Project): Promise<ProjectIndex | null> {
+  if (project.remote) {
+    return loadProjectIndexRemote(project);
+  }
+  return loadProjectIndexLocal(project.path);
 }
 
 /**
@@ -96,8 +137,8 @@ export function registerProjectContextHandlers(
       }
 
       try {
-        // Load project index
-        const projectIndex = loadProjectIndex(project.path);
+        // Load project index (local or remote)
+        const projectIndex = await loadProjectIndex(project);
 
         // Load graphiti state from most recent spec
         const memoryState = loadGraphitiStateFromSpecs(project.path, project.autoBuildPath);
@@ -160,56 +201,26 @@ export function registerProjectContextHandlers(
         const analyzerPath = path.join(autoBuildSource, 'analyzer.py');
         const indexOutputPath = path.join(project.path, AUTO_BUILD_PATHS.PROJECT_INDEX);
 
-        // Get configured Python path (venv if ready, otherwise bundled/system)
-        // This ensures we use the venv Python which has dependencies installed
-        const pythonCmd = getConfiguredPythonPath();
-        console.log('[project-context] Using Python:', pythonCmd);
+        console.log('[project-context] Running analyzer via pythonExecutor, remote:', !!project.remote);
 
-        const [pythonCommand, pythonBaseArgs] = parsePythonCommand(pythonCmd);
+        // Use centralized Python executor (handles local vs remote automatically)
+        const result = await pythonExecutor.execute(
+          project,
+          analyzerPath,
+          ['--project-dir', project.path, '--output', indexOutputPath]
+        );
 
-        // Run analyzer
-        await new Promise<void>((resolve, reject) => {
-          let stdout = '';
-          let stderr = '';
-
-          const proc = spawn(pythonCommand, [
-            ...pythonBaseArgs,
-            analyzerPath,
-            '--project-dir', project.path,
-            '--output', indexOutputPath
-          ], {
-            cwd: project.path,
-            env: getAugmentedEnv()
-          });
-
-          proc.stdout?.on('data', (data) => {
-            stdout += data.toString();
-          });
-
-          proc.stderr?.on('data', (data) => {
-            stderr += data.toString();
-          });
-
-          proc.on('close', (code: number) => {
-            if (code === 0) {
-              console.log('[project-context] Analyzer stdout:', stdout);
-              resolve();
-            } else {
-              console.error('[project-context] Analyzer failed with code', code);
-              console.error('[project-context] Analyzer stderr:', stderr);
-              console.error('[project-context] Analyzer stdout:', stdout);
-              reject(new Error(`Analyzer exited with code ${code}: ${stderr || stdout}`));
-            }
-          });
-
-          proc.on('error', (err) => {
-            console.error('[project-context] Analyzer spawn error:', err);
-            reject(err);
-          });
-        });
+        if (result.success) {
+          console.log('[project-context] Analyzer stdout:', result.stdout);
+        } else {
+          console.error('[project-context] Analyzer failed with code', result.code);
+          console.error('[project-context] Analyzer stderr:', result.stderr);
+          console.error('[project-context] Analyzer stdout:', result.stdout);
+          throw new Error(`Analyzer exited with code ${result.code}: ${result.stderr || result.stdout}`);
+        }
 
         // Read the new index
-        const projectIndex = loadProjectIndex(project.path);
+        const projectIndex = await loadProjectIndex(project);
         if (projectIndex) {
           return { success: true, data: projectIndex };
         }
