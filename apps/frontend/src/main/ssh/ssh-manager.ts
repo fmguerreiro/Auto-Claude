@@ -80,8 +80,67 @@ export class SSHManager {
 
   /**
    * Test SSH connection to a server config (without requiring it to be saved)
+   * Also validates Python and Auto-Claude installation if autoBuildPath is configured
    */
   async testServerConnection(server: SSHServer): Promise<SSHConnectionTestResult> {
+    const startTime = Date.now();
+
+    // Step 1: Basic SSH connectivity test
+    const connectResult = await this.testBasicConnection(server);
+    if (!connectResult.success) {
+      return connectResult;
+    }
+
+    const latencyMs = Date.now() - startTime;
+
+    // Step 2: Test Python availability
+    const pythonPath = server.pythonPath || 'python3';
+    const pythonResult = await this.executeCommand(
+      server,
+      `${pythonPath} --version 2>&1`
+    );
+
+    if (!pythonResult.success) {
+      return {
+        success: false,
+        message: `Connected but Python not found`,
+        error: `Python command '${pythonPath}' failed: ${pythonResult.stderr}`,
+        latencyMs
+      };
+    }
+
+    const pythonVersion = pythonResult.stdout.trim();
+
+    // Step 3: If autoBuildPath is configured, verify Auto-Claude installation
+    const autoBuildPath = server.autoBuildPath || '~/opt/Auto-Claude';
+    const analyzerPath = `${autoBuildPath}/apps/backend/analyzer.py`;
+
+    const analyzerResult = await this.executeCommand(
+      server,
+      `test -f "${analyzerPath}" && echo "FOUND" || echo "NOT_FOUND"`
+    );
+
+    if (!analyzerResult.stdout.includes('FOUND')) {
+      return {
+        success: false,
+        message: `Connected but Auto-Claude not found`,
+        error: `Auto-Claude not installed at ${autoBuildPath}. Clone the repo there or update the path in settings.`,
+        latencyMs
+      };
+    }
+
+    return {
+      success: true,
+      message: `Connected to ${server.name}`,
+      serverVersion: pythonVersion,
+      latencyMs
+    };
+  }
+
+  /**
+   * Basic SSH connectivity test (just echo)
+   */
+  private testBasicConnection(server: SSHServer): Promise<SSHConnectionTestResult> {
     const startTime = Date.now();
 
     return new Promise((resolve) => {
@@ -89,9 +148,9 @@ export class SSHManager {
 
       // Add options for connection testing
       sshArgs.unshift(
-        '-o', 'BatchMode=yes',           // Don't prompt for password
-        '-o', 'ConnectTimeout=10',       // 10 second timeout
-        '-o', 'StrictHostKeyChecking=accept-new'  // Accept new host keys
+        '-o', 'BatchMode=yes',
+        '-o', 'ConnectTimeout=10',
+        '-o', 'StrictHostKeyChecking=accept-new'
       );
 
       // Simple echo test
